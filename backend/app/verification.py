@@ -1,3 +1,5 @@
+import importlib.resources
+import json
 import xml.etree.ElementTree as ET
 from enum import Enum
 from uuid import uuid4
@@ -66,6 +68,18 @@ class ErrorDetail(str, Enum):
 # Utility functions
 
 
+def _get_manual_verification_mappings() -> dict[str, str]:
+    try:
+        with importlib.resources.open_text(
+            "app.staticfiles", "manual_verifications.json"
+        ) as f:
+            manual_verifications: dict[str, str] = json.load(f)
+            return manual_verifications
+    except Exception as err:
+        print(f"Failed to load manual maps: {err}")
+        return {}
+
+
 def _matches_prefixes(app_id: str, *prefixes) -> bool:
     return any(app_id.startswith(prefix + ".") for prefix in prefixes)
 
@@ -119,6 +133,7 @@ def _demangle_name(name: str) -> str:
 
 
 def _get_domain_name(app_id: str) -> str | None:
+    manual_maps = _get_manual_verification_mappings()
     if _matches_prefixes(app_id, "com.github", "com.gitlab"):
         # These app IDs are common, and we don't want to confuse people by saying they can put a file on GitHub/GitLab's main website.
         return None
@@ -134,6 +149,9 @@ def _get_domain_name(app_id: str) -> str | None:
         projectname = _demangle_name(projectname)
         # https://sourceforge.net/p/forge/documentation/Project%20Web%20Services/
         return f"{projectname}.{domain}.io".lower()
+    elif manual_maps and app_id in manual_maps:
+        domain = _demangle_name(manual_maps[app_id])
+        return domain.lower()
     else:
         fqdn = ".".join(reversed(app_id.split("."))).lower()
 
